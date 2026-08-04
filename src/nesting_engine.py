@@ -1,9 +1,9 @@
 import numpy as np
 from PIL import Image
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon, MultiPolygon
 from shapely.affinity import translate
 from shapely.strtree import STRtree
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Union
 from src.config_loader import ConfigLoader
 from src.geometry import NormalizedGeometry
 
@@ -17,8 +17,8 @@ class PlacedItem:
         y: float,
         rotation_deg: float,
         rot_pil: Image.Image,
-        placed_polygon: Polygon,
-        placed_buffered_polygon: Polygon,
+        placed_polygon: Union[Polygon, MultiPolygon],
+        placed_buffered_polygon: Union[Polygon, MultiPolygon],
         rot_w: float,
         rot_h: float
     ):
@@ -50,7 +50,7 @@ class A3Sheet:
         self.max_y = max_y
         
         self.placed_items: List[PlacedItem] = []
-        self.placed_buffered_polygons: List[Polygon] = []
+        self.placed_buffered_polygons: List[Union[Polygon, MultiPolygon]] = []
         self.spatial_tree: Optional[STRtree] = None
 
     def _rebuild_tree(self):
@@ -65,8 +65,8 @@ class A3Sheet:
         y: float,
         rot_w: float,
         rot_h: float,
-        candidate_buffered_poly: Polygon,
-        candidate_poly: Polygon
+        candidate_buffered_poly: Union[Polygon, MultiPolygon],
+        candidate_poly: Union[Polygon, MultiPolygon]
     ) -> bool:
         # STRICT BOUNDARY CHECK: Entire Image Box MUST fit 100% inside printable bounds
         if x < self.min_x or y < self.min_y or (x + rot_w) > self.max_x or (y + rot_h) > self.max_y:
@@ -75,7 +75,7 @@ class A3Sheet:
         if not self.placed_buffered_polygons:
             return True
 
-        # Fast R-Tree spatial index query for Polygon collision
+        # Fast R-Tree spatial index query for Polygon/MultiPolygon collision
         if self.spatial_tree is not None:
             possible_matches = self.spatial_tree.query(candidate_buffered_poly)
             for idx in possible_matches:
@@ -96,7 +96,7 @@ class A3Sheet:
         y: float,
         rotation_deg: float,
         rot_pil: Image.Image,
-        rot_poly: Polygon,
+        rot_poly: Union[Polygon, MultiPolygon],
         rot_w: float,
         rot_h: float,
         padding_px: float
@@ -128,9 +128,9 @@ class A3Sheet:
 class NestingEngine:
     """
     Nesting Engine thực hiện:
-    - Xoay hình học theo danh sách góc cấu hình
+    - Xoay hình học theo danh sách góc cấu hình (Hỗ trợ MultiPolygon)
     - Collision Detection với R-Tree Spatial Index
-    - Nghiêm cấm hoàn toàn hành vi tràn khung A3
+    - Nghiêm cấm hoàn toàn chồng đè và tràn khung A3
     """
     def __init__(self, config: ConfigLoader):
         self.config = config
@@ -185,9 +185,9 @@ class NestingEngine:
     def _find_best_position(
         self,
         sheet: A3Sheet,
-        rotations_data: List[Tuple[float, Image.Image, Polygon, Polygon, float, float]],
+        rotations_data: List[Tuple[float, Image.Image, Union[Polygon, MultiPolygon], Union[Polygon, MultiPolygon], float, float]],
         search_step_px: int
-    ) -> Optional[Tuple[float, float, float, Image.Image, Polygon, float, float]]:
+    ) -> Optional[Tuple[float, float, float, Image.Image, Union[Polygon, MultiPolygon], float, float]]:
         best_candidate = None
         min_score = float('inf')
 

@@ -18,7 +18,7 @@ class ItemImage:
         width: int,
         height: int,
         alpha_mask: np.ndarray,
-        contour_pts: np.ndarray,
+        contours_list: List[np.ndarray], # Danh sách từng contour riêng biệt (không vstack)
         bbox: Tuple[int, int, int, int],
         real_area: float,
         bbox_area: float,
@@ -31,7 +31,7 @@ class ItemImage:
         self.width = width
         self.height = height
         self.alpha_mask = alpha_mask
-        self.contour_pts = contour_pts
+        self.contours_list = contours_list
         self.bbox = bbox
         self.real_area = real_area
         self.bbox_area = bbox_area
@@ -41,9 +41,9 @@ class ItemImage:
 class Preprocessor:
     """
     Tiền xử lý ảnh PNG:
-    - Đọc kích thước & Kênh Alpha
-    - Tự động scale nếu kích thước vượt A3 printable bounds (theo config)
-    - Tách Contour, Tính Bounding Box, Diện tích thật, Centroid
+    - Trích xuất từng Contour độc lập (Hỗ trợ hình gồm nhiều chữ cái/phần tử rời nhau)
+    - Tự động scale nếu kích thước vượt A3 printable bounds
+    - Tính Bounding Box, Diện tích thật, Centroid
     """
     def __init__(self, config: ConfigLoader):
         self.config = config
@@ -77,37 +77,59 @@ class Preprocessor:
         alpha_thresh_val = self.config.preprocessing.get("alpha_threshold", 10)
         _, alpha_mask = cv2.threshold(alpha_channel, alpha_thresh_val, 255, cv2.THRESH_BINARY)
 
-        # Find contours
+        # Find external contours
         contours, _ = cv2.findContours(alpha_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             contours = [np.array([[[0, 0]], [[width, 0]], [[width, height]], [[0, height]]])]
 
-        min_area = self.config.preprocessing.get("min_contour_area_px", 20.0)
-        valid_contours = [c for c in contours if cv2.contourArea(c) >= min_area]
-        if not valid_contours:
-            valid_contours = contours
-
-        all_pts = np.vstack(valid_contours)
+        min_area = self.config.preprocessing.get("min_contour_area_px", 10.0)
         
-        # Simplify contour
-        epsilon_ratio = self.config.preprocessing.get("contour_approx_epsilon", 0.003)
-        perimeter = cv2.arcLength(all_pts, True)
-        approx_contour = cv2.approxPolyDP(all_pts, epsilon_ratio * perimeter, True)
-        if len(approx_contour) < 3:
-            approx_contour = all_pts
+        # Keep list of valid individual contours (do NOT vstack!)
+        processed_contours = []
+        total_real_area = 0.0
+        total_perimeter = 0.0
+        all_pts_for_bbox = []
 
-        # Bounding box
-        bx, by, bw, bh = cv2.boundingRect(all_pts)
+        epsilon_ratio = self.config.preprocessing.get("contour_approx_epsilon", 0.003)
+
+        for c in contours:
+            c_area = cv2.contourArea(c)
+            if c_area >= min_area:
+                c_peri = cv2.arcLength(c, True)
+                approx_c = cv2.approxPolyDP(c, max(1.0, epsilon_ratio * c_peri), True)
+                if len(approx_c) >= 3:
+                    pts_2d = approx_c.reshape(-1, 2)
+                    processed_contours.append(pts_2d)
+                    total_real_area += c_area
+                    total_perimeter += c_peri
+                    all_pts_for_bbox.append(pts_2d)
+
+        # Fallback if no contour passed min_area filter
+        if not processed_contours:
+            for c in contours:
+                pts_2d = c.reshape(-1, 2)
+                if len(pts_2d) >= 3:
+                    processed_contours.append(pts_2d)
+                    total_real_area += cv2.contourArea(c)
+                    all_pts_for_bbox.append(pts_2d)
+
+        if not processed_contours:
+            # Full image box fallback
+            pts_2d = np.array([[0, 0], [width, 0], [width, height], [0, height]])
+            processed_contours = [pts_2d]
+            all_pts_for_bbox = [pts_2d]
+            total_real_area = float(width * height)
+
+        stacked_pts = np.vstack(all_pts_for_bbox)
+        bx, by, bw, bh = cv2.boundingRect(stacked_pts)
         bbox = (int(bx), int(by), int(bw), int(bh))
 
-        # Real Area & BBox Area
-        real_area = float(sum(cv2.contourArea(c) for c in valid_contours))
-        if real_area <= 0:
-            real_area = float(bw * bh)
         bbox_area = float(bw * bh)
+        if total_real_area <= 0:
+            total_real_area = bbox_area
 
         # Centroid / Center of mass
-        M = cv2.moments(all_pts)
+        M = cv2.moments(stacked_pts)
         if M["m00"] != 0:
             cx = float(M["m10"] / M["m00"])
             cy = float(M["m01"] / M["m00"])
@@ -124,12 +146,12 @@ class Preprocessor:
             width=width,
             height=height,
             alpha_mask=alpha_mask,
-            contour_pts=approx_contour,
+            contours_list=processed_contours,
             bbox=bbox,
-            real_area=real_area,
+            real_area=total_real_area,
             bbox_area=bbox_area,
             centroid=(cx, cy),
-            perimeter=perimeter
+            perimeter=total_perimeter
         )
 
     def load_all_from_folder(self, folder_path: str) -> List[ItemImage]:
