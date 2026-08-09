@@ -1,0 +1,24 @@
+{
+  "canvas": {
+    "paper_size": "Custom",
+    "width_mm": 390.0,
+    "height_mm": 290.0,
+    "dpi": 500,
+    "margin_top_mm": 0.0,
+    "margin_bottom_mm": 0.0,
+    "margin_left_mm": 0.0,
+    "margin_right_mm": 0.0
+  },
+  "preprocessing": {
+    "use_embedded_dpi": true,
+    "auto_scale_oversized": false
+  },
+  "nesting": {
+    "padding_mm": 3.0,
+    "enable_360_rotation": true,
+    "rotation_step_deg": 15
+  },
+  "quality_check": {
+    "tolerance_px": 2.0
+  }
+}

@@ -1,13 +1,13 @@
 {
   "canvas": {
-    "paper_size": "A3",
-    "width_mm": 297.0,
-    "height_mm": 420.0,
-    "dpi": 150,
-    "margin_top_mm": 5.0,
-    "margin_bottom_mm": 5.0,
-    "margin_left_mm": 5.0,
-    "margin_right_mm": 5.0,
+    "paper_size": "Custom",
+    "width_mm": 390.0,
+    "height_mm": 290.0,
+    "dpi": 500,
+    "margin_top_mm": 0.0,
+    "margin_bottom_mm": 0.0,
+    "margin_left_mm": 0.0,
+    "margin_right_mm": 0.0,
     "background_color_rgba": [
       255,
       255,
