@@ -1,35 +1,36 @@
 @echo off
-chcp 65001 > nul
-title Git Clone & Setup - 2D PNG Nesting Engine A3
+title Git Clone Setup - 2D PNG Nesting Engine
 
 echo ========================================================
-echo   Tự Động Clone & Cài Đặt Dự Án 2D PNG Nesting Engine
+echo   Git Clone Setup - 2D PNG Nesting Engine
 echo ========================================================
 echo.
-
-echo [1/3] Đang clone repository từ GitHub...
+echo [1/3] Cloning repository from GitHub...
 git clone https://github.com/DuongLD48/2d-png-nesting-a3.git
-if errorlevel 1 (
-    echo [LỖI] Không thể clone repository. Vui lòng kiểm tra lại Git hoặc kết nối mạng!
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto ERROR_GIT
 
 cd 2d-png-nesting-a3
 
 echo.
-echo [2/3] Đang cài đặt các thư viện Python cần thiết...
+echo [2/3] Installing Python dependencies...
 pip install -r requirements.txt
-if errorlevel 1 (
-    echo [LỖI] Cài đặt thư viện thất bại. Vui lòng kiểm tra lại Python và pip!
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto ERROR_PIP
 
 echo.
-echo [3/3] Hoàn tất cài đặt thành công!
-echo.
-echo Nhấn phím bất kỳ để chạy ứng dụng Nesting (main.py)...
-pause > nul
+echo [3/3] Setup Completed Successfully!
+echo Running main.py ...
 python main.py --config config.json
 pause
+exit /b 0
+
+:ERROR_GIT
+echo.
+echo [ERROR] Git clone failed. Please check Git installation or network connection.
+pause
+exit /b 1
+
+:ERROR_PIP
+echo.
+echo [ERROR] Dependency installation failed. Please check Python/pip installation.
+pause
+exit /b 1
