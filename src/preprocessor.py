@@ -58,17 +58,41 @@ class Preprocessor:
             print(f"Lỗi khi đọc file ảnh {file_path}: {e}")
             return None
 
+        w_orig, h_orig = pil_img.size
+
+        # Check embedded DPI / PPI metadata (e.g. Photoshop 500 DPI, 300 DPI)
+        use_embedded_dpi = self.config.preprocessing.get("use_embedded_dpi", True)
+        canvas_dpi = float(self.config.canvas.get("dpi", 150))
+        
+        embedded_dpi_info = pil_img.info.get("dpi")
+        img_dpi = None
+        if use_embedded_dpi and embedded_dpi_info and embedded_dpi_info[0] > 0:
+            img_dpi = float(embedded_dpi_info[0])
+
+        if img_dpi is not None and img_dpi > 0 and abs(img_dpi - canvas_dpi) > 1.0:
+            # Convert pixels from embedded DPI (e.g. 500 DPI) to target canvas DPI (e.g. 150 DPI)
+            w_mm = (w_orig / img_dpi) * 25.4
+            h_mm = (h_orig / img_dpi) * 25.4
+            
+            target_w_px = max(1, int(round((w_mm * canvas_dpi) / 25.4)))
+            target_h_px = max(1, int(round((h_mm * canvas_dpi) / 25.4)))
+            
+            if (target_w_px, target_h_px) != (w_orig, h_orig):
+                pil_img = pil_img.resize((target_w_px, target_h_px), Image.Resampling.BICUBIC)
+                print(f" -> [Auto DPI] File '{os.path.basename(file_path)}': Phát hiện metadata {img_dpi:.0f} DPI (Photoshop/Design). Kích thước thực: {w_mm/10.0:.1f}x{h_mm/10.0:.1f} cm -> Quy đổi về Canvas ({target_w_px}x{target_h_px} px @ {canvas_dpi:.0f} DPI)")
+
         # Check auto scaling for oversized images
-        auto_scale = self.config.preprocessing.get("auto_scale_oversized", True)
+        auto_scale = self.config.preprocessing.get("auto_scale_oversized", False)
         max_dim_mm = self.config.preprocessing.get("max_item_dimension_mm", 280.0)
         max_dim_px = self.config.mm_to_px(max_dim_mm)
 
-        w_orig, h_orig = pil_img.size
-        if auto_scale and (w_orig > max_dim_px or h_orig > max_dim_px):
-            scale_factor = max_dim_px / float(max(w_orig, h_orig))
-            new_w = max(10, int(w_orig * scale_factor))
-            new_h = max(10, int(h_orig * scale_factor))
+        w_curr, h_curr = pil_img.size
+        if auto_scale and (w_curr > max_dim_px or h_curr > max_dim_px):
+            scale_factor = max_dim_px / float(max(w_curr, h_curr))
+            new_w = max(10, int(w_curr * scale_factor))
+            new_h = max(10, int(h_curr * scale_factor))
             pil_img = pil_img.resize((new_w, new_h), Image.Resampling.BICUBIC)
+
 
         width, height = pil_img.size
         img_np = np.array(pil_img) # H x W x 4 (RGBA)

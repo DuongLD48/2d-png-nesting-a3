@@ -8,20 +8,32 @@
     "margin_bottom_mm": 5.0,
     "margin_left_mm": 5.0,
     "margin_right_mm": 5.0,
-    "background_color_rgba": [255, 255, 255, 0]
+    "background_color_rgba": [
+      255,
+      255,
+      255,
+      0
+    ]
   },
   "preprocessing": {
     "alpha_threshold": 10,
     "contour_approx_epsilon": 0.003,
     "min_contour_area_px": 20.0,
     "auto_scale_oversized": false,
+    "use_embedded_dpi": true,
+    "default_input_dpi": "match_canvas",
     "max_item_dimension_mm": 280.0
   },
   "nesting": {
     "padding_mm": 3.0,
     "enable_360_rotation": true,
     "rotation_step_deg": 15,
-    "rotation_angles_deg": [0, 90, 180, 270],
+    "rotation_angles_deg": [
+      0,
+      90,
+      180,
+      270
+    ],
     "strategy": "bottom_left_fill",
     "search_step_px": 10,
     "use_spatial_index": true,
@@ -41,7 +53,7 @@
     "allow_overlap": false,
     "enforce_margins": true,
     "enforce_padding": true,
-    "tolerance_px": 0.5
+    "tolerance_px": 2.0
   },
   "paths": {
     "input_folder": "pngfile",

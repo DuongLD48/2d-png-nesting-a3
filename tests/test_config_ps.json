@@ -1,0 +1,12 @@
+{
+  "canvas": {
+    "paper_size": "A3",
+    "width_mm": 297.0,
+    "height_mm": 420.0,
+    "dpi": 150
+  },
+  "preprocessing": {
+    "use_embedded_dpi": true,
+    "auto_scale_oversized": false
+  }
+}
