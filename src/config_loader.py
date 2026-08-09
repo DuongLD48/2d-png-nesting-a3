@@ -41,6 +41,22 @@ class ConfigLoader:
         return self.raw_config.get("nesting", {})
 
     @property
+    def rotation_angles(self) -> List[float]:
+        nest_cfg = self.nesting
+        if nest_cfg.get("enable_360_rotation", True):
+            step = float(nest_cfg.get("rotation_step_deg", 15))
+            if step <= 0:
+                step = 15.0
+            angles = []
+            a = 0.0
+            while a < 360.0:
+                angles.append(round(a, 1))
+                a += step
+            return angles
+        return nest_cfg.get("rotation_angles_deg", [0, 90, 180, 270])
+
+
+    @property
     def sorting(self) -> Dict[str, Any]:
         return self.raw_config.get("sorting", {})
 
