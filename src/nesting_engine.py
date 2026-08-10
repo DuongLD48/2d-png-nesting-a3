@@ -236,7 +236,55 @@ class NestingEngine:
                         print(f"Cảnh báo: Không thể xếp {geom.item_id} vào trang mới!")
                         break
 
+        for sheet in sheets:
+            self._center_sheet_layout(sheet)
+
         return sheets
+
+
+    def _center_sheet_layout(self, sheet: A3Sheet):
+        """
+        Căn giữa toàn bộ bố cục các hình đã xếp trên tờ giấy (Canvas),
+        đảm bảo khoảng cách cách đều 4 mép Trên / Dưới / Trái / Phải.
+        """
+        if not sheet.placed_items:
+            return
+
+        center_layout = self.config.nesting.get("center_layout", True)
+        if not center_layout:
+            return
+
+        center_in_printable = self.config.nesting.get("center_in_printable_area", True)
+
+        placed_min_x = min(item.x for item in sheet.placed_items)
+        placed_max_x = max(item.x + item.rot_w for item in sheet.placed_items)
+        placed_min_y = min(item.y for item in sheet.placed_items)
+        placed_max_y = max(item.y + item.rot_h for item in sheet.placed_items)
+
+        content_w = placed_max_x - placed_min_x
+        content_h = placed_max_y - placed_min_y
+
+        if center_in_printable:
+            target_min_x = sheet.min_x + (sheet.max_x - sheet.min_x - content_w) / 2.0
+            target_min_y = sheet.min_y + (sheet.max_y - sheet.min_y - content_h) / 2.0
+        else:
+            target_min_x = (sheet.width_px - content_w) / 2.0
+            target_min_y = (sheet.height_px - content_h) / 2.0
+
+        shift_x = target_min_x - placed_min_x
+        shift_y = target_min_y - placed_min_y
+
+        if abs(shift_x) < 0.01 and abs(shift_y) < 0.01:
+            return
+
+        for item in sheet.placed_items:
+            item.x += shift_x
+            item.y += shift_y
+            item.placed_polygon = translate(item.placed_polygon, xoff=shift_x, yoff=shift_y)
+            item.placed_buffered_polygon = translate(item.placed_buffered_polygon, xoff=shift_x, yoff=shift_y)
+
+        sheet._rebuild_tree()
+
 
     def _try_repack_dfs(
         self,
