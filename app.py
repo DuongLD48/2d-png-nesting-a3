@@ -876,9 +876,12 @@ def start_server():
         except Exception:
             pass
 
+    from src.job_runner import get_valid_path
     cfg = load_local_config()
-    os.makedirs(cfg.get("output_dir", "output"), exist_ok=True)
-    os.makedirs(cfg.get("anhlocal_dir", "ANHLOCAL"), exist_ok=True)
+    out_dir = get_valid_path(cfg.get("output_dir"), "output")
+    img_dir = get_valid_path(cfg.get("anhlocal_dir"), "ANHLOCAL")
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(img_dir, exist_ok=True)
 
     # Start standalone Python backend Firebase listener thread
     start_backend_firebase_listener()

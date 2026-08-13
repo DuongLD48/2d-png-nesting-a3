@@ -1,6 +1,6 @@
 {
-  "anhlocal_dir": "E:\\FINAL\\Anh-Hoang\\AUTO-MACCHOVUI\\NESTING\\ANHLOCAL",
-  "output_dir": "E:\\FINAL\\Anh-Hoang\\AUTO-MACCHOVUI\\NESTING\\output",
+  "anhlocal_dir": "ANHLOCAL",
+  "output_dir": "output",
   "custom_nesting": {
     "paper_size": "Custom (390x290mm)",
     "width_mm": 390.0,

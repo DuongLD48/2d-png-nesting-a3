@@ -66,11 +66,22 @@ def write_sku_history_entries(job_data: Dict[str, Any], sku_results: List[Dict[s
         except Exception as error:
             print(f"[SKU History] Could not record {entry['sku']}: {error}", flush=True)
 
+def get_valid_path(path_str: str, default_relative: str) -> str:
+    if not path_str:
+        return os.path.abspath(default_relative)
+    try:
+        drive, _ = os.path.splitdrive(path_str)
+        if drive and not os.path.exists(drive + "\\"):
+            return os.path.abspath(default_relative)
+    except Exception:
+        pass
+    return os.path.abspath(path_str)
+
 def load_local_config() -> Dict[str, Any]:
     if not os.path.exists(LOCAL_CONFIG_PATH):
         default_config = {
-            "anhlocal_dir": r"E:\FINAL\Anh-Hoang\AUTO-MACCHOVUI\NESTING\ANHLOCAL",
-            "output_dir": r"E:\FINAL\Anh-Hoang\AUTO-MACCHOVUI\NESTING\output",
+            "anhlocal_dir": "ANHLOCAL",
+            "output_dir": "output",
             "custom_nesting": {
                 "paper_size": "Custom (390x290mm)",
                 "width_mm": 390.0,
@@ -106,8 +117,17 @@ def load_local_config() -> Dict[str, Any]:
         save_local_config(default_config)
         return default_config
     
-    with open(LOCAL_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(LOCAL_CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+            cfg["anhlocal_dir"] = get_valid_path(cfg.get("anhlocal_dir"), "ANHLOCAL")
+            cfg["output_dir"] = get_valid_path(cfg.get("output_dir"), "output")
+            return cfg
+    except Exception:
+        return {
+            "anhlocal_dir": os.path.abspath("ANHLOCAL"),
+            "output_dir": os.path.abspath("output")
+        }
 
 def save_local_config(config_data: Dict[str, Any]) -> bool:
     try:
@@ -133,8 +153,8 @@ def run_job_execution(job_data: Dict[str, Any]) -> Dict[str, Any]:
     job_type = job_data.get("job_type", "custom_nesting")
     
     local_cfg = load_local_config()
-    anhlocal_dir = local_cfg.get("anhlocal_dir", r"E:\FINAL\Anh-Hoang\AUTO-MACCHOVUI\NESTING\ANHLOCAL")
-    base_output_dir = local_cfg.get("output_dir", r"E:\FINAL\Anh-Hoang\AUTO-MACCHOVUI\NESTING\output")
+    anhlocal_dir = get_valid_path(local_cfg.get("anhlocal_dir"), "ANHLOCAL")
+    base_output_dir = get_valid_path(local_cfg.get("output_dir"), "output")
 
     timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
