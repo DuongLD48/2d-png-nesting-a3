@@ -52,21 +52,36 @@ class NormalizedGeometry:
     def get_rotated_data(self, angle_deg: float) -> Tuple[Image.Image, Union[Polygon, MultiPolygon], float, float]:
         """
         Xoay ảnh PIL và biến đổi chính xác 100% tất cả các contours thành Polygon/MultiPolygon.
+        Sử dụng Cache & PIL transpose siêu tốc cho các góc 90, 180, 270 độ.
         """
+        if not hasattr(self, "_rotated_cache"):
+            self._rotated_cache = {}
+
+        norm_angle = float(angle_deg) % 360.0
+        if norm_angle in self._rotated_cache:
+            return self._rotated_cache[norm_angle]
+
         orig_pil = self.item.image_pil
 
-        if angle_deg == 0:
-            rot_pil = orig_pil
-            rot_shape = self.shape
-            return rot_pil, rot_shape, float(self.orig_w), float(self.orig_h)
+        if norm_angle == 0:
+            res = (orig_pil, self.shape, float(self.orig_w), float(self.orig_h))
+            self._rotated_cache[0.0] = res
+            return res
 
-        # PIL rotate angle is counter-clockwise.
-        # Rotate with expand=True to get exact new image canvas dimensions
-        rot_pil = orig_pil.rotate(-angle_deg, resample=Image.Resampling.BICUBIC, expand=True)
+        # Ultra-fast loss-less C-transpose for orthogonal angles
+        if norm_angle == 90:
+            rot_pil = orig_pil.transpose(Image.Transpose.ROTATE_270)
+        elif norm_angle == 180:
+            rot_pil = orig_pil.transpose(Image.Transpose.ROTATE_180)
+        elif norm_angle == 270:
+            rot_pil = orig_pil.transpose(Image.Transpose.ROTATE_90)
+        else:
+            rot_pil = orig_pil.rotate(-norm_angle, resample=Image.Resampling.BILINEAR, expand=True)
+
         rot_w, rot_h = rot_pil.size
 
         # Exact transformation matrix corresponding to PIL rotate(expand=True)
-        rad = np.radians(-angle_deg)
+        rad = np.radians(-norm_angle)
         cos_a = np.cos(rad)
         sin_a = np.sin(rad)
 
@@ -101,4 +116,6 @@ class NormalizedGeometry:
         if not rot_shape.is_valid:
             rot_shape = rot_shape.buffer(0)
 
-        return rot_pil, rot_shape, float(rot_w), float(rot_h)
+        res = (rot_pil, rot_shape, float(rot_w), float(rot_h))
+        self._rotated_cache[norm_angle] = res
+        return res

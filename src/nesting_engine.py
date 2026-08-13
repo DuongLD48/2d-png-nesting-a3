@@ -184,8 +184,12 @@ class NestingEngine:
             else:
                 valid_geoms.append(geom)
 
+        total_valid = len(valid_geoms)
+        print(f" -> [BƯỚC 5/6] Bắt đầu Nesting Engine 2D cho {total_valid} hình vẽ...", flush=True)
+
         for idx, geom in enumerate(valid_geoms, start=1):
             placed = False
+            print(f"    ↳ [{idx}/{total_valid}] Đang tính toán góc xoay & vị trí tốt nhất cho '{geom.item_id}'...", flush=True)
 
             # Pre-compute rotated PIL images, polygons, and exact bounding sizes for candidate
             rotations_data = []
@@ -202,6 +206,7 @@ class NestingEngine:
                     x, y, angle, rot_pil, rot_poly, rot_w, rot_h = best_pos
                     sheet.place_item(geom, x, y, angle, rot_pil, rot_poly, rot_w, rot_h, padding_px)
                     placed = True
+                    print(f"    ✔ [{idx}/{total_valid}] Đã xếp '{geom.item_id}' vào Trang {sheet.sheet_index} tại góc {angle}°", flush=True)
                     break
 
             # 2. If direct placement failed on existing sheets, try DFS Re-Packing Optimization on existing sheets!
@@ -219,6 +224,7 @@ class NestingEngine:
                                 p_item.rot_pil, p_item.placed_polygon, p_item.rot_w, p_item.rot_h, padding_px
                             )
                         placed = True
+                        print(f"    ✔ [{idx}/{total_valid}] Re-Packing DFS: Đã dồn xếp '{geom.item_id}' vừa vào Trang {sheet.sheet_index}!", flush=True)
                         break
 
             # 3. If still not placed, spawn new sheet
@@ -231,9 +237,10 @@ class NestingEngine:
                         new_sheet.place_item(geom, x, y, angle, rot_pil, rot_poly, rot_w, rot_h, padding_px)
                         sheets.append(new_sheet)
                         placed = True
+                        print(f"    ✔ [{idx}/{total_valid}] Mở Trang Mới {new_sheet.sheet_index} & xếp '{geom.item_id}' thành công!", flush=True)
                         break
                     else:
-                        print(f"Cảnh báo: Không thể xếp {geom.item_id} vào trang mới!")
+                        print(f"Cảnh báo: Không thể xếp {geom.item_id} vào trang mới!", flush=True)
                         break
 
         for sheet in sheets:
@@ -299,16 +306,21 @@ class NestingEngine:
         Tự động thử mọi kết hợp góc xoay hợp lệ để dồn tối đa các hình vào 1 trang duy nhất.
         """
         test_sheet = A3Sheet(sheet_index=sheet_index, config=self.config)
+        sheet_printable_area = (test_sheet.max_x - test_sheet.min_x) * (test_sheet.max_y - test_sheet.min_y)
+        total_group_area = sum(g.real_area for g in group_geoms)
+        if total_group_area > sheet_printable_area * 0.90:
+            return None
+
         sorted_group = sorted(group_geoms, key=lambda g: g.real_area, reverse=True)
 
         # For repacking efficiency, use principal angles [0, 90, 180, 270] if group is large
         repack_angles = rotation_angles
-        if len(sorted_group) > 4:
+        if len(sorted_group) > 3:
             repack_angles = [a for a in rotation_angles if int(a) in [0, 90, 180, 270]]
             if not repack_angles:
                 repack_angles = rotation_angles[:4]
 
-        max_states = 500
+        max_states = 40
         state_count = 0
 
         def dfs_pack(item_idx: int) -> bool:
@@ -329,7 +341,7 @@ class NestingEngine:
                 rotations_data.append((angle, rot_pil, rot_poly, rot_buf_poly, rot_w, rot_h))
 
             candidates = self._find_all_candidates(test_sheet, rotations_data, search_step_px)
-            for x, y, angle, rot_pil, rot_poly, rot_w, rot_h in candidates[:6]:
+            for x, y, angle, rot_pil, rot_poly, rot_w, rot_h in candidates[:4]:
                 test_sheet.place_item(geom, x, y, angle, rot_pil, rot_poly, rot_w, rot_h, padding_px)
                 if dfs_pack(item_idx + 1):
                     return True

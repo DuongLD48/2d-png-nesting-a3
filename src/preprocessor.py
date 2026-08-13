@@ -70,7 +70,7 @@ class Preprocessor:
             img_dpi = float(embedded_dpi_info[0])
 
         if img_dpi is not None and img_dpi > 0 and abs(img_dpi - canvas_dpi) > 1.0:
-            # Convert pixels from embedded DPI (e.g. 500 DPI) to target canvas DPI (e.g. 150 DPI)
+            # Convert pixels from embedded DPI (e.g. 300 DPI) to target canvas DPI
             w_mm = (w_orig / img_dpi) * 25.4
             h_mm = (h_orig / img_dpi) * 25.4
             
@@ -78,8 +78,9 @@ class Preprocessor:
             target_h_px = max(1, int(round((h_mm * canvas_dpi) / 25.4)))
             
             if (target_w_px, target_h_px) != (w_orig, h_orig):
-                pil_img = pil_img.resize((target_w_px, target_h_px), Image.Resampling.BICUBIC)
-                print(f" -> [Auto DPI] File '{os.path.basename(file_path)}': Phát hiện metadata {img_dpi:.0f} DPI (Photoshop/Design). Kích thước thực: {w_mm/10.0:.1f}x{h_mm/10.0:.1f} cm -> Quy đổi về Canvas ({target_w_px}x{target_h_px} px @ {canvas_dpi:.0f} DPI)")
+                # Fast BILINEAR resampling for speed
+                pil_img = pil_img.resize((target_w_px, target_h_px), Image.Resampling.BILINEAR)
+                print(f" -> [Auto DPI] File '{os.path.basename(file_path)}': Metadata {img_dpi:.0f} DPI -> Quy đổi về Canvas ({target_w_px}x{target_h_px} px @ {canvas_dpi:.0f} DPI)")
 
         # Check auto scaling for oversized images
         auto_scale = self.config.preprocessing.get("auto_scale_oversized", False)
@@ -91,18 +92,39 @@ class Preprocessor:
             scale_factor = max_dim_px / float(max(w_curr, h_curr))
             new_w = max(10, int(w_curr * scale_factor))
             new_h = max(10, int(h_curr * scale_factor))
-            pil_img = pil_img.resize((new_w, new_h), Image.Resampling.BICUBIC)
-
+            pil_img = pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
         width, height = pil_img.size
-        img_np = np.array(pil_img) # H x W x 4 (RGBA)
-        alpha_channel = img_np[:, :, 3]
+        
+        # Fast Alpha Channel extraction (1-channel uint8 instead of 4-channel RGBA)
+        if "A" in pil_img.getbands():
+            alpha_channel = np.array(pil_img.getchannel("A"))
+        else:
+            alpha_channel = np.full((height, width), 255, dtype=np.uint8)
 
         alpha_thresh_val = self.config.preprocessing.get("alpha_threshold", 10)
-        _, alpha_mask = cv2.threshold(alpha_channel, alpha_thresh_val, 255, cv2.THRESH_BINARY)
 
-        # Find external contours
-        contours, _ = cv2.findContours(alpha_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Ultra-fast downsampled contour extraction for large images (>1200px)
+        scale_down = 1.0
+        if max(width, height) > 1200:
+            scale_down = max(width, height) / 1200.0
+            ds_w = max(10, int(width / scale_down))
+            ds_h = max(10, int(height / scale_down))
+            ds_alpha = cv2.resize(alpha_channel, (ds_w, ds_h), interpolation=cv2.INTER_NEAREST)
+            _, alpha_mask_ds = cv2.threshold(ds_alpha, alpha_thresh_val, 255, cv2.THRESH_BINARY)
+            contours_raw, _ = cv2.findContours(alpha_mask_ds, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Scale contour coordinates back up to full size
+            contours = []
+            for c in contours_raw:
+                scaled_c = (c.astype(np.float32) * scale_down).astype(np.int32)
+                contours.append(scaled_c)
+            
+            _, alpha_mask = cv2.threshold(alpha_channel, alpha_thresh_val, 255, cv2.THRESH_BINARY)
+        else:
+            _, alpha_mask = cv2.threshold(alpha_channel, alpha_thresh_val, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(alpha_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
         if not contours:
             contours = [np.array([[[0, 0]], [[width, 0]], [[width, height]], [[0, height]]])]
 
@@ -190,8 +212,13 @@ class Preprocessor:
         ]
         
         items = []
-        for f in sorted(files):
+        total_files = len(files)
+        print(f" -> [BƯỚC 3/6] Đang tiền xử lý {total_files} file ảnh PNG...", flush=True)
+        for idx, f in enumerate(sorted(files), start=1):
+            fname = os.path.basename(f)
+            print(f"    ↳ [{idx}/{total_files}] Đọc & tách viền kênh Alpha file '{fname}'...", flush=True)
             item = self.process_file(f)
             if item:
                 items.append(item)
+                print(f"    ✔ [{idx}/{total_files}] Hoàn tất '{fname}' (Contour polygons: {len(item.contours_list)})", flush=True)
         return items

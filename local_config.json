@@ -1,0 +1,35 @@
+{
+  "anhlocal_dir": "E:\\FINAL\\Anh-Hoang\\AUTO-MACCHOVUI\\NESTING\\ANHLOCAL",
+  "output_dir": "E:\\FINAL\\Anh-Hoang\\AUTO-MACCHOVUI\\NESTING\\output",
+  "custom_nesting": {
+    "paper_size": "Custom (390x290mm)",
+    "width_mm": 390.0,
+    "height_mm": 290.0,
+    "dpi": 300,
+    "padding_mm": 3.0,
+    "margin_top_mm": 0.0,
+    "margin_bottom_mm": 0.0,
+    "margin_left_mm": 0.0,
+    "margin_right_mm": 0.0,
+    "rotation_angles_deg": [0, 90, 180, 270],
+    "auto_scale_oversized": false
+  },
+  "pet_nesting": {
+    "paper_size": "PET Roll (580x1000mm)",
+    "width_mm": 580.0,
+    "height_mm": 1000.0,
+    "dpi": 300,
+    "padding_mm": 5.0,
+    "margin_top_mm": 0.0,
+    "margin_bottom_mm": 0.0,
+    "margin_left_mm": 0.0,
+    "margin_right_mm": 0.0,
+    "rotation_angles_deg": [0, 90, 180, 270],
+    "auto_scale_oversized": false
+  },
+  "firebase": {
+    "projectId": "order-web-hoang",
+    "apiKey": "AIzaSyC1SK8dB0FSz00EkeXErBdgp-SOeUj-HCU",
+    "auto_listen": true
+  }
+}
