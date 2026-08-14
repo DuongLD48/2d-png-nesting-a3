@@ -30,7 +30,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- Firebase 10 SDK via ESM -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { getFirestore, collection, query, where, limit, onSnapshot, doc, updateDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         window.initLocalFirebaseSync = function(config) {
             if (!config || !config.apiKey || !config.projectId) {
@@ -46,9 +46,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('fb-sync-status').className = 'status-badge status-online';
                 document.getElementById('fb-sync-status').innerHTML = '🟢 Firebase Sync Realtime Active';
 
-                // Listen to print_jobs collection in real-time
-                const jobsRef = collection(db, 'print_jobs');
-                onSnapshot(jobsRef, (snapshot) => {
+                // Listen ONLY to pending print_jobs to save Firestore read quota
+                const jobsQuery = query(collection(db, 'print_jobs'), where('status', '==', 'pending'), limit(10));
+                onSnapshot(jobsQuery, (snapshot) => {
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === 'added' || change.type === 'modified') {
                             const jobData = { id: change.doc.id, ...change.doc.data() };
@@ -808,27 +808,50 @@ def safe_run_job_execution(job_data):
 
 def start_backend_firebase_listener():
     """
-    Background daemon thread that continuously listens to Firebase Firestore 'print_jobs'
-    directly from Python backend (100% independent of whether the browser frontend is open or closed).
+    Background daemon thread that listens to Firebase Firestore for 'pending' print_jobs
+    using structured queries with adaptive sleep to preserve Firebase free tier quota.
     """
     def listener_loop():
-        print("🟢 [Python Backend] 100% Standalone Firebase Firestore Listener Thread Active!", flush=True)
+        print("🟢 [Python Backend] Optimized Firebase Firestore Listener Thread Active (Quota-Friendly)!", flush=True)
         project_id = "order-web-hoang"
-        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/print_jobs"
+        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents:runQuery"
+        query_payload = json.dumps({
+            "structuredQuery": {
+                "from": [{"collectionId": "print_jobs"}],
+                "where": {
+                    "fieldFilter": {
+                        "field": {"fieldPath": "status"},
+                        "op": "EQUAL",
+                        "value": {"stringValue": "pending"}
+                    }
+                },
+                "limit": 5
+            }
+        }).encode("utf-8")
 
         while True:
+            sleep_duration = 15
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "NestingBackend/1.0"})
+                req = urllib.request.Request(
+                    url,
+                    data=query_payload,
+                    headers={"User-Agent": "NestingBackend/1.0", "Content-Type": "application/json"},
+                    method="POST"
+                )
                 with urllib.request.urlopen(req, timeout=10) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    docs = data.get("documents", [])
-                    for doc_raw in docs:
+                    results = json.loads(resp.read().decode("utf-8"))
+                    # runQuery returns array of [{ "document": { ... } }] or [{ "readTime": "..." }]
+                    for item in results:
+                        doc_raw = item.get("document")
+                        if not doc_raw:
+                            continue
                         job_data = parse_firestore_doc(doc_raw)
                         job_id = job_data.get("id")
                         status = job_data.get("status")
 
                         if status == "pending" and job_id not in PROCESSED_JOBS_SET:
                             PROCESSED_JOBS_SET.add(job_id)
+                            sleep_duration = 2
                             print(f"\n⚡ [Python Backend Realtime] Nhận Print Job mới từ Firebase: {job_id} (Đơn: {job_data.get('order_id')})", flush=True)
                             
                             # Execute job safely in Python backend
@@ -860,7 +883,7 @@ def start_backend_firebase_listener():
             except Exception:
                 pass
             
-            time.sleep(2)
+            time.sleep(sleep_duration)
 
     t = threading.Thread(target=listener_loop, daemon=True)
     t.start()
