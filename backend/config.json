@@ -1,0 +1,66 @@
+{
+  "canvas": {
+    "paper_size": "Custom",
+    "width_mm": 390.0,
+    "height_mm": 290.0,
+    "dpi": 300,
+    "margin_top_mm": 0.0,
+    "margin_bottom_mm": 0.0,
+    "margin_left_mm": 0.0,
+    "margin_right_mm": 0.0,
+    "background_color_rgba": [
+      255,
+      255,
+      255,
+      0
+    ]
+  },
+  "preprocessing": {
+    "alpha_threshold": 10,
+    "contour_approx_epsilon": 0.003,
+    "min_contour_area_px": 20.0,
+    "auto_scale_oversized": false,
+    "use_embedded_dpi": true,
+    "default_input_dpi": "match_canvas",
+    "max_item_dimension_mm": 280.0
+  },
+  "nesting": {
+    "padding_mm": 3.0,
+    "enable_360_rotation": true,
+    "rotation_step_deg": 15,
+    "center_layout": true,
+    "center_in_printable_area": true,
+    "rotation_angles_deg": [
+      0,
+      90,
+      180,
+      270
+    ],
+    "strategy": "bottom_left_fill",
+    "search_step_px": 10,
+    "use_spatial_index": true,
+    "max_sheets_limit": 50
+  },
+  "sorting": {
+    "primary_key": "area",
+    "secondary_key": "complexity",
+    "tertiary_key": "aspect_ratio",
+    "reverse": true
+  },
+  "rendering": {
+    "resampling_filter": "bicubic",
+    "anti_aliasing": true
+  },
+  "quality_check": {
+    "allow_overlap": false,
+    "enforce_margins": true,
+    "enforce_padding": true,
+    "tolerance_px": 2.0
+  },
+  "paths": {
+    "input_folder": "pngfile",
+    "output_folder": "output",
+    "layout_filename": "layout.json",
+    "report_filename": "report.csv"
+  }
+}

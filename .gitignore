@@ -1,37 +1,35 @@
+# Node
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+package-lock.json
+backend/package-lock.json
+frontend/package-lock.json
+.env
+backend/.env
+frontend/.env
+
 # Python
 __pycache__/
+backend/src/__pycache__/
+src/__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
 venv/
-ENV/
 .venv
 
-# IDE
+# Output jobs
+output/
+backend/output/
+*.png
+*.csv
+
+# IDE & OS
 .vscode/
 .idea/
-
-# macOS
 .DS_Store
-
-# Large outputs (optional)
-output/*.png

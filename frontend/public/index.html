@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Red Broadcast - 2D PNG Nesting Engine & Firebase Monitor</title>
+  <!-- Google Fonts: Roboto & Roboto Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+
+  <!-- Firebase 10 Client SDK via ESM for Realtime Browser Listening -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, query, where, limit, onSnapshot, doc, updateDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    window.initClientFirebaseSync = function(config) {
+      if (!config || !config.apiKey || !config.projectId) {
+        const badge = document.getElementById('fb-sync-status');
+        if (badge) {
+          badge.className = 'status-badge status-offline';
+          badge.innerHTML = '<iconify-icon icon="lucide:radio" width="14"></iconify-icon> Standby (API Mode)';
+        }
+        return;
+      }
+
+      try {
+        const app = initializeApp(config);
+        const db = getFirestore(app);
+        const badge = document.getElementById('fb-sync-status');
+        if (badge) {
+          badge.className = 'status-badge status-online';
+          badge.innerHTML = '<iconify-icon icon="lucide:radio" width="14"></iconify-icon> Firebase Realtime Active';
+        }
+
+        const jobsQuery = query(collection(db, 'print_jobs'), where('status', '==', 'pending'), limit(10));
+        onSnapshot(jobsQuery, (snapshot) => {
+          snapshot.docChanges().forEach(async (change) => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const jobData = { id: change.doc.id, ...change.doc.data() };
+              if (jobData.status === 'pending' && !window.processingJobs?.[jobData.id]) {
+                if (!window.processingJobs) window.processingJobs = {};
+                window.processingJobs[jobData.id] = true;
+
+                window.appendLog(`📥 [FIREBASE REALTIME] Nhận lệnh Print Job: ${jobData.id} (Order: ${jobData.order_id || 'N/A'})`);
+                try {
+                  await window.executeJob(jobData);
+                } catch (e) {
+                  console.error('[Firebase Client Exec Error]', e);
+                } finally {
+                  delete window.processingJobs[jobData.id];
+                }
+              }
+            }
+          });
+        }, (err) => {
+          console.error('[Firebase Client Listener Error]', err);
+          if (badge) {
+            badge.className = 'status-badge status-offline';
+            badge.innerHTML = '<iconify-icon icon="lucide:alert-circle" width="14"></iconify-icon> Firebase Error';
+          }
+        });
+      } catch (e) {
+        console.error('[Firebase Client Init Error]', e);
+      }
+    };
+  </script>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="brand-container">
+      <a href="#" class="brand-logo">
+        <iconify-icon icon="lucide:layers" style="color: var(--primary);" width="24"></iconify-icon>
+        <span>RED BROADCAST</span>
+        <span class="brand-badge">NESTING 2.0</span>
+      </a>
+    </div>
+
+    <div class="system-status-group">
+      <div id="backend-status-badge" class="status-badge status-offline">
+        <iconify-icon icon="lucide:loader" class="spin" width="14"></iconify-icon> Kiểm Tra Backend...
+      </div>
+      <div id="fb-sync-status" class="status-badge status-offline">
+        <iconify-icon icon="lucide:radio" width="14"></iconify-icon> Khởi tạo Firebase...
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tab Bar -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('tab-manual', this)">
+      <iconify-icon icon="lucide:play-circle" width="18"></iconify-icon> Chạy Thủ Công (Manual)
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-settings', this)">
+      <iconify-icon icon="lucide:sliders" width="18"></iconify-icon> Cài Đặt Khổ In & Thư Mục
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-history', this)">
+      <iconify-icon icon="lucide:folder-open" width="18"></iconify-icon> Lịch Sử & Thư Mục In (Gallery)
+    </button>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    <div class="grid-2col">
+      
+      <!-- Left Column: Tabs Content -->
+      <div class="left-col">
+        
+        <!-- Tab 1: Manual Run -->
+        <section id="tab-manual" class="tab-content active">
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:zap" style="color: var(--primary);"></iconify-icon>
+                Kích Hoạt Lệnh Xếp Khổ / In Ảnh Thủ Công
+              </h2>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-order-id">Mã Đơn Hàng (Order ID)</label>
+              <input type="text" id="manual-order-id" class="form-control" placeholder="Ví dụ: #1024 hoặc SO1002" value="#TEST_ORDER" />
+              <div class="form-hint">Mã đơn hàng hiển thị trong báo cáo layout và thư mục kết quả.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-skus">Danh Sách Mã SKU (Phân cách bằng dấu phẩy)</label>
+              <textarea id="manual-skus" class="form-control" rows="3" placeholder="Ví dụ: SP01-SANG-M, SP02-TOI-L, MCV-001">SP01-SANG-M, SP02-TOI-L</textarea>
+              <div class="form-hint">Hệ thống sẽ tự động quét thư mục ANHLOCAL để tìm file ảnh PNG tương ứng với từng SKU.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-job-type">Loại Tác Vụ In / Xếp Khổ</label>
+              <select id="manual-job-type" class="form-control">
+                <option value="custom_nesting">📐 In Decal Khổ Custom (390 x 290 mm - 300 DPI)</option>
+                <option value="pet_nesting">📜 In Cuộn PET DTF Roll (580 x 1000 mm - 300 DPI)</option>
+                <option value="dtg">🖨️ In DTG Trực Tiếp (Chỉ lọc & gom file ảnh)</option>
+              </select>
+            </div>
+
+            <button id="btn-run-manual" class="btn btn-primary btn-block" style="padding: 12px; font-size: 15px;" onclick="runManualJob()">
+              <iconify-icon icon="lucide:play" width="18"></iconify-icon> Bắt Đầu Xếp Khổ / Xuất Ảnh
+            </button>
+          </div>
+
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:info" style="color: var(--secondary-link);"></iconify-icon>
+                Thông Tin Trạng Thái Local
+              </h2>
+            </div>
+            <div style="font-size: 13px; line-height: 1.8; color: var(--text-secondary);">
+              <div>📁 Thư mục ANHLOCAL: <strong id="lbl-anhlocal" style="color: #FFF;">...</strong></div>
+              <div>📂 Thư mục Output: <strong id="lbl-output" style="color: #FFF;">...</strong></div>
+              <div>⚡ Engine: <strong style="color: #FFF;">Python 2D Polygon Nesting (STRtree DFS)</strong></div>
+              <div>🌐 Backend Server: <strong style="color: #FFF;">Node.js Express (Port 5001)</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 2: Settings -->
+        <section id="tab-settings" class="tab-content">
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:folder-cog" style="color: var(--primary);"></iconify-icon>
+                Cấu Hình Đường Dẫn Thư Mục
+              </h2>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="cfg-anhlocal">Đường dẫn thư mục ANHLOCAL (Kho ảnh PNG)</label>
+              <input type="text" id="cfg-anhlocal" class="form-control" />
+              <div class="form-hint">Thư mục chứa các file ảnh PNG gốc theo SKU.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="cfg-output">Đường dẫn thư mục Xuất Kết Quả (Output)</label>
+              <input type="text" id="cfg-output" class="form-control" />
+              <div class="form-hint">Nơi lưu trữ ảnh đã xếp khổ, file layout.json và report.csv.</div>
+            </div>
+          </div>
+
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:maximize" style="color: var(--primary);"></iconify-icon>
+                Cài Đặt Khổ In Custom Nesting (Decal / Tấm)
+              </h2>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="custom-paper-size">Tên Khổ Giấy</label>
+              <input type="text" id="custom-paper-size" class="form-control" />
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="custom-width-mm">Chiều Rộng (mm)</label>
+                <input type="number" id="custom-width-mm" class="form-control" step="0.1" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="custom-height-mm">Chiều Cao (mm)</label>
+                <input type="number" id="custom-height-mm" class="form-control" step="0.1" />
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="custom-dpi">Độ Phân Giải (DPI)</label>
+                <input type="number" id="custom-dpi" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="custom-padding-mm">Khoảng Cách Padding (mm)</label>
+                <input type="number" id="custom-padding-mm" class="form-control" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:scroll" style="color: var(--primary);"></iconify-icon>
+                Cài Đặt Khổ In PET Roll Nesting (Cuộn DTF)
+              </h2>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="pet-paper-size">Tên Khổ Cuộn</label>
+              <input type="text" id="pet-paper-size" class="form-control" />
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="pet-width-mm">Chiều Rộng Cuộn (mm)</label>
+                <input type="number" id="pet-width-mm" class="form-control" step="0.1" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="pet-height-mm">Chiều Dài Khung (mm)</label>
+                <input type="number" id="pet-height-mm" class="form-control" step="0.1" />
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="pet-dpi">Độ Phân Giải (DPI)</label>
+                <input type="number" id="pet-dpi" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="pet-padding-mm">Khoảng Cách Padding (mm)</label>
+                <input type="number" id="pet-padding-mm" class="form-control" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:flame" style="color: #FFA000;"></iconify-icon>
+                Cấu Hình Firebase Firestore
+              </h2>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cfg-fb-project">Firebase Project ID</label>
+              <input type="text" id="cfg-fb-project" class="form-control" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cfg-fb-key">Firebase Web API Key</label>
+              <input type="text" id="cfg-fb-key" class="form-control" />
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-block" style="padding: 12px;" onclick="saveConfigToServer()">
+            <iconify-icon icon="lucide:save" width="18"></iconify-icon> Lưu Toàn Bộ Cấu Hình
+          </button>
+        </section>
+
+        <!-- Tab 3: History -->
+        <section id="tab-history" class="tab-content">
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <iconify-icon icon="lucide:archive" style="color: var(--primary);"></iconify-icon>
+                Danh Sách Thư Mục & Kết Quả Print Job
+              </h2>
+              <button class="btn btn-secondary btn-sm" onclick="refreshHistory()">
+                <iconify-icon icon="lucide:refresh-cw" width="14"></iconify-icon> Làm Mới
+              </button>
+            </div>
+            <div id="history-container">
+              <p style="color: var(--text-secondary);">Đang tải danh sách kết quả...</p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right Column: Realtime Terminal Log -->
+      <div class="right-col">
+        <div class="terminal-card">
+          <div class="terminal-header">
+            <div class="terminal-title">
+              <iconify-icon icon="lucide:terminal" width="16" style="color: var(--primary);"></iconify-icon>
+              <span>CONSOLE LOGS</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="clearLogs()" title="Xóa log">
+              <iconify-icon icon="lucide:trash-2" width="14"></iconify-icon> Xóa Log
+            </button>
+          </div>
+          <div id="log-terminal" class="terminal-body">
+            <div class="log-entry">
+              <span class="log-time">[SYSTEM]</span> 2D PNG Nesting Engine v2.0 (Node.js + Python) Ready.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Modal Preview -->
+  <div id="preview-modal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div id="modal-title" class="modal-title">Xem Trước Ảnh Kết Quả</div>
+        <button class="modal-close" onclick="closeModal()">
+          <iconify-icon icon="lucide:x" width="20"></iconify-icon>
+        </button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
